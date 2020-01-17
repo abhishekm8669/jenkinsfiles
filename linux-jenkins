@@ -1,0 +1,315 @@
+node("master")
+{
+  stage("Switch to Kubernetes Cluster")
+  {
+	  git credentialsId: 'Git credentials', url: 'https://github.com/SujataKale97/Blockchain-POC.git'
+	  sh '''
+	  	gcloud container clusters get-credentials standard-cluster-1 --zone us-central1-a --project blockchain-264405
+	'''
+  }
+  stage("Deploy Zookeeper")
+  {
+	
+  	sh '''
+        kubectl create -f Kafka-zookeeper/zookeeper-deployment.yaml
+        kubectl create -f Kafka-zookeeper/zookeeper-service.yaml
+	sleep 5
+	
+	#Ensure Pod Status
+       	podStatus=$(kubectl get po | grep zookeeper | awk '{print $3}')
+      	while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for zookeeper container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep zookeeper | awk '{print $3}')
+       done
+     	 '''
+  }
+  stage("Deploy Kafka")
+  {
+  sh '''
+        kubectl create -f Kafka-zookeeper/kafka-deploy.yaml
+        kubectl create -f Kafka-zookeeper/kafka-service.yaml
+	sleep 5
+	
+	#Ensure Pod Status
+       	podStatus=$(kubectl get po | grep kafka-broker | awk '{print $3}')
+      	while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for kafka-broker container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep kafka-broker | awk '{print $3}')
+       done
+      '''
+  } 
+  stage("Mount GCE disk")
+  {
+      sh '''
+        kubectl create -f nfs/nfs-server.yaml
+        kubectl create -f nfs/nfs-service.yaml
+	sleep 5
+	
+	#Ensure Pod Status
+       	podStatus=$(kubectl get po | grep nfs-server | awk '{print $3}')
+      	while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for nfs-server container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep nfs-server | awk '{print $3}')
+       done
+      '''
+  } 
+  stage("Setup shared storage")
+  {
+    sh '''
+    kubectl create -f fabric-pv.yaml
+	sleep 10
+    kubectl create -f fabric-pvc.yaml
+	sleep 10
+    kubectl create -f fabric-tools.yaml
+	sleep 5
+    
+    #Ensure Pod Status
+    podStatus=$(kubectl get po | grep fabric-tools | awk '{print $3}')
+    while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for Fabric tools container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep fabric-tools | awk '{print $3}')
+    done
+    
+    # Create a config directory on shared filesystem to hold config files
+    kubectl exec -it fabric-tools -- mkdir /fabric/config
+    '''
+  } 
+  stage("Loading config files into shared storage")
+  {
+    sh '''
+      kubectl cp config/configtx.yaml fabric-tools:/fabric/config/
+	  sleep 10
+      kubectl cp config/crypto-config.yaml fabric-tools:/fabric/config/
+	  sleep 10
+      kubectl cp config/chaincode/ fabric-tools:/fabric/config/
+	  sleep 10
+     '''
+  } 
+  stage("Creating necessary artifacts")
+  {
+    sh '''
+      kubectl cp Scripts/ fabric-tools:/fabric/
+	  sleep 10
+      kubectl exec -it fabric-tools -- sh /fabric/Scripts/artifact.sh
+          sleep 10
+    '''
+  }
+  stage("Deploy Fabric CA")
+  {
+    sh '''
+      kubectl create -f blockchain-ca_deploy.yaml
+      kubectl create -f blockchain-ca_service.yaml
+	  sleep 5
+      #Ensure Pod Status
+      podStatus=$(kubectl get po | grep blockchain-ca | awk '{print $3}')
+      while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for blockchain-ca container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep blockchain-ca | awk '{print $3}')
+       done
+    '''
+  }
+  stage("Deploy Orderer")
+  {
+    sh '''
+      kubectl create -f blockchain-orderer_deploy.yaml
+      kubectl create -f blockchain-orderer_svc.yaml
+      sleep 5
+      
+      #Ensure Pod Status
+      podStatus=$(kubectl get po | grep blockchain-orderer | awk '{print $3}')
+      while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for blockchain-orderer container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep blockchain-orderer | awk '{print $3}')
+       done
+    '''
+  } 
+ stage("Deploy organization peer nodes")
+  {
+    sh '''
+      kubectl create -f blockchain-org1peer1_deploy.yaml
+      kubectl create -f blockchain-org1peer2_deploy.yaml
+      kubectl create -f blockchain-org1peer2_svc.yaml
+      sleep 10
+      
+      #Ensure Pod Status
+      podStatus=$(kubectl get po | grep blockchain-org1peer1 | awk '{print $3}')
+      while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for blockchain-org1peer1 container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep blockchain-org1peer1 | awk '{print $3}')
+       done
+       
+       #Ensure Pod Status
+       podStatus=$(kubectl get po | grep blockchain-org1peer2 | awk '{print $3}')
+       while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for blockchain-org1peer2 container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep blockchain-org1peer2 | awk '{print $3}')
+       done
+    '''
+  }
+   stage("Set domain names")
+  {
+    sh '''
+        # Fabric-tools
+       domNameTools=$(kubectl exec -it fabric-tools -- tail -n 1 /etc/hosts)
+      
+       # Fabric-CA
+       podName=$(kubectl get po | grep blockchain-ca | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/cp-ca.sh
+       domNameCA=$(kubectl exec -it $podName -- tail -n 1 /etc/hosts)
+       
+       # Fabric-Orderer
+       podName=$(kubectl get po | grep blockchain-orderer | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/cp-orderer.sh
+       domNameOrderer=$(kubectl exec -it $podName -- tail -n 1 /etc/hosts)
+       
+       # Fabric-Org1Peer1
+       podName=$(kubectl get po | grep blockchain-org1peer1 | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/cp-org1peer1.sh
+       domNameOrg1Peer1=$(kubectl exec -it $podName -- tail -n 1 /etc/hosts)
+        
+       # Fabric-Org1Peer2
+       podName=$(kubectl get po | grep blockchain-org1peer2 | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/cp-org1peer2.sh
+       domNameOrg1Peer2=$(kubectl exec -it $podName -- tail -n 1 /etc/hosts)
+       
+       touch DomNames
+       echo $domNameTools > DomNames
+       echo $domNameCA >> DomNames
+       echo $domNameOrderer >> DomNames
+       echo $domNameOrg1Peer1 >> DomNames
+       echo $domNameOrg1Peer2 >> DomNames
+       
+       kubectl cp DomNames fabric-tools:/fabric/config
+       
+       kubectl exec -it fabric-tools -- sh /fabric/Scripts/paste-ip.sh
+       
+       podName=$(kubectl get po | grep blockchain-ca | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/paste-ip.sh
+       
+       podName=$(kubectl get po | grep blockchain-orderer | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/paste-ip.sh
+       
+       podName=$(kubectl get po | grep blockchain-org1peer1 | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/paste-ip.sh
+       
+       podName=$(kubectl get po | grep blockchain-org1peer2 | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/paste-ip.sh
+    '''
+  }
+  stage("Create Channel")
+  {
+     sh '''
+        kubectl exec -it fabric-tools -- sh /fabric/Scripts/create-channel.sh
+     '''
+  }
+  stage("Join Channel")
+  {
+    sh '''
+        kubectl exec -it fabric-tools -- sh /fabric/Scripts/join-channel.sh
+    '''
+  }
+  stage("Install Chaincode")
+  {
+     sh '''
+        kubectl exec -it fabric-tools -- sh /fabric/Scripts/install-chain.sh
+     '''
+  }
+  stage("Instantiate Chaincode")
+  {
+    sh '''
+      kubectl exec -it fabric-tools -- sh /fabric/Scripts/instantiate-chain.sh
+    '''
+  }
+  stage("Update Anchor Peers")
+  {
+    sh '''
+      pod=$(kubectl get pods | grep blockchain-org1peer1 | awk '{print $1}')
+      kubectl exec -it $pod -- peer channel update -f /fabric/Org1MSPanchors.tx -c channel1 -o blockchain-orderer.default.svc.cluster.local:31010 
+    '''
+  }
+  stage("Deploy Hyperledger Explorer")
+  {
+     sh '''
+      kubectl create -f blockchain-explorer-db_deploy.yaml
+      kubectl create -f blockchain-explorer-db_svc.yaml
+	  sleep 5
+	  
+      #Ensure Pod Status
+       podStatus=$(kubectl get po | grep blockchain-explorer-db | awk '{print $3}')
+       while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for blockchain-explorer-db container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep blockchain-explorer-db | awk '{print $3}')
+       done
+       
+      pod=$(kubectl get pods | grep blockchain-explorer-db | awk '{print $1}')
+      kubectl exec -it $pod -- sh /fabric/Scripts/db.sh
+     '''
+  } 
+  stage("Configure Blockchain-Explorer")
+  {
+    sh '''
+      kubectl exec -it fabric-tools -- sh /fabric/Scripts/explorer.sh
+    
+      kubectl create -f fabric-explorer.yaml
+      sleep 5
+      #Ensure Pod Status
+       podStatus=$(kubectl get po | grep fabric-explorer | awk '{print $3}')
+       while [ "${podStatus}" != "Running" ]; do
+        echo "Wating for fabric-explorer container to run. Current status of container is ${podStatus}"
+        sleep 5;
+        if [ "${podStatus}" == "Error" ]; then
+            echo "There is an error in the pod. Please check logs."
+            exit 1
+        fi
+        podStatus=$(kubectl get po | grep fabric-explorer | awk '{print $3}')
+       done
+       podName=$(kubectl get po | grep fabric-explorer | awk '{print $1}')
+       kubectl exec -it $podName -- sh /fabric/Scripts/paste-ip.sh
+    '''
+  }
+}
