@@ -1,5 +1,0 @@
-Instance, Start_time, End_time, MaxCPU(%), MinCPU(%), AvgCPU(%), DataPointsSize, LowUsage EC2 count, Tags
-i-0629b6916257a18cb,2020-04-06 07:44:14.746757,2020-04-07 07:49:14.746757,4.83333333333333,0.169491525423671,1.9453860640301113,3,1,[This Instance doesn't have tags],
------------------------------------------------------------------------------------------------
-Total 1 EC2 instances are under utilizing CPUs (under 10% avg 	usage) on ap-south-1
------------------------------------------------------------------------------------------------

@@ -1,8 +1,0 @@
-Instance, Start_time, End_time, MaxCPU(%), MinCPU(%), AvgCPU(%), DataPointsSize, LowUsage EC2 count, Tags
-i-0c2ef804cbe165524,2020-04-04 07:49:15.878682,2020-04-07 07:54:15.878682,100.0,0.847457627118644,11.798140809094122,19,0,server1 : master,Name : ansible master,backup : yes,
-i-00ce64092cbee37ab,2020-04-04 07:49:15.878682,2020-04-07 07:54:15.878682,37.8333333333333,0.508474576271109,6.038002759051016,19,1,backup : yes,Name : ansible client,server2 : client,
-i-0d254a1d2a496817d,2020-04-04 07:49:15.878682,2020-04-07 07:54:15.878682,Instance ID: i-0d254a1d2a496817d doesn't have datapoints It's seems stopped.,Name : ansible client2,
-i-0ece1ff639d06ff3c,2020-04-04 07:49:15.878682,2020-04-07 07:54:15.878682,Instance ID: i-0ece1ff639d06ff3c doesn't have datapoints It's seems stopped.,[This Instance doesn't have tags],
------------------------------------------------------------------------------------------------
-Total 1 EC2 instances are under utilizing CPUs (under 10% avg 	usage) on us-east-1
------------------------------------------------------------------------------------------------
